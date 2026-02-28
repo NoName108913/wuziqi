@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>网页版五子棋</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: "微软雅黑", sans-serif;
+        }
+
+        body {
+            background-color: #f5f5f5;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 20px;
+        }
+
+        .game-title {
+            font-size: 32px;
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        .game-info {
+            font-size: 18px;
+            color: #555;
+            margin-bottom: 10px;
+        }
+
+        .chess-board {
+            width: 500px;
+            height: 500px;
+            background-color: #f0d988;
+            border: 8px solid #b8860b;
+            display: grid;
+            grid-template-columns: repeat(15, 1fr);
+            grid-template-rows: repeat(15, 1fr);
+            gap: 1px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.2);
+        }
+
+        .chess-cell {
+            background-color: #f0d988;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .chess-cell:hover {
+            background-color: #e6c878;
+        }
+
+        /* 棋盘网格线 */
+        .chess-cell::before {
+            content: "";
+            position: absolute;
+            width: 1px;
+            height: 100%;
+            background-color: #8b4513;
+            left: 0;
+            top: 0;
+        }
+
+        .chess-cell::after {
+            content: "";
+            position: absolute;
+            width: 100%;
+            height: 1px;
+            background-color: #8b4513;
+            left: 0;
+            top: 0;
+        }
+
+        /* 棋子样式 */
+        .chess-piece {
+            position: absolute;
+            width: 90%;
+            height: 90%;
+            border-radius: 50%;
+            left: 5%;
+            top: 5%;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.3);
+            z-index: 10;
+        }
+
+        .black {
+            background-color: #000;
+        }
+
+        .white {
+            background-color: #fff;
+            border: 1px solid #ccc;
+        }
+
+        .restart-btn {
+            margin-top: 20px;
+            padding: 10px 30px;
+            font-size: 18px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .restart-btn:hover {
+            background-color: #45a049;
+        }
+
+        /* 胜负提示弹窗样式 */
+        .win-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+
+        .modal-content {
+            background-color: white;
+            padding: 30px 50px;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 0 20px rgba(0,0,0,0.3);
+        }
+
+        .win-title {
+            font-size: 28px;
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .win-player {
+            font-size: 36px;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+
+        .black-win {
+            color: #000;
+        }
+
+        .white-win {
+            color: #fff;
+            text-shadow: 0 0 2px #000, 0 0 5px #000;
+        }
+
+        .modal-btn {
+            padding: 8px 25px;
+            font-size: 18px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .modal-btn:hover {
+            background-color: #45a049;
+        }
+
+        /* 响应式适配手机 */
+        @media (max-width: 550px) {
+            .chess-board {
+                width: 350px;
+                height: 350px;
+            }
+            .game-title {
+                font-size: 24px;
+            }
+            .modal-content {
+                padding: 20px 30px;
+            }
+            .win-title {
+                font-size: 24px;
+            }
+            .win-player {
+                font-size: 30px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1 class="game-title">网页版五子棋</h1>
+    <div class="game-info">当前回合：<span id="current-player">黑棋</span></div>
+    <div class="chess-board" id="chessBoard"></div>
+    <button class="restart-btn" onclick="restartGame()">重新开始</button>
+
+    <!-- 胜负提示弹窗 -->
+    <div class="win-modal" id="winModal">
+        <div class="modal-content">
+            <div class="win-title">游戏结束！</div>
+            <div class="win-player" id="winPlayer"></div>
+            <button class="modal-btn" onclick="closeModal()">确定</button>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量
+        const BOARD_SIZE = 15; // 棋盘大小（15*15）
+        let chessBoard = Array(BOARD_SIZE).fill().map(() => Array(BOARD_SIZE).fill(0)); // 0:空 1:黑棋 2:白棋
+        let currentPlayer = 1; // 1:黑棋 2:白棋
+        let gameOver = false;
+        const winModal = document.getElementById('winModal');
+        const winPlayer = document.getElementById('winPlayer');
+
+        // 初始化棋盘
+        function initBoard() {
+            const board = document.getElementById('chessBoard');
+            board.innerHTML = '';
+            for (let y = 0; y < BOARD_SIZE; y++) {
+                for (let x = 0; x < BOARD_SIZE; x++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'chess-cell';
+                    cell.dataset.x = x;
+                    cell.dataset.y = y;
+                    cell.onclick = () => placeChess(x, y);
+                    board.appendChild(cell);
+                }
+            }
+        }
+
+        // 落子逻辑
+        function placeChess(x, y) {
+            // 游戏结束或已有棋子，不允许落子
+            if (gameOver || chessBoard[y][x] !== 0) return;
+
+            // 记录落子
+            chessBoard[y][x] = currentPlayer;
+            // 渲染棋子
+            const cell = document.querySelector(`.chess-cell[data-x="${x}"][data-y="${y}"]`);
+            const piece = document.createElement('div');
+            piece.className = `chess-piece ${currentPlayer === 1 ? 'black' : 'white'}`;
+            cell.appendChild(piece);
+
+            // 检查是否获胜
+            if (checkWin(x, y)) {
+                showWinModal(currentPlayer); // 显示胜负弹窗
+                gameOver = true;
+                return;
+            }
+
+            // 切换玩家
+            currentPlayer = currentPlayer === 1 ? 2 : 1;
+            document.getElementById('current-player').textContent = currentPlayer === 1 ? '黑棋' : '白棋';
+        }
+
+        // 胜负检测（横、竖、左斜、右斜四个方向）
+        function checkWin(x, y) {
+            const player = chessBoard[y][x];
+            const directions = [
+                [0, 1],  // 横向
+                [1, 0],  // 竖向
+                [1, 1],  // 右斜
+                [1, -1]  // 左斜
+            ];
+
+            for (let [dx, dy] of directions) {
+                let count = 1; // 当前棋子算1个
+
+                // 正向检测
+                for (let i = 1; i < 5; i++) {
+                    const nx = x + dx * i;
+                    const ny = y + dy * i;
+                    if (nx >= 0 && nx < BOARD_SIZE && ny >= 0 && ny < BOARD_SIZE && chessBoard[ny][nx] === player) {
+                        count++;
+                    } else {
+                        break;
+                    }
+                }
+
+                // 反向检测
+                for (let i = 1; i < 5; i++) {
+                    const nx = x - dx * i;
+                    const ny = y - dy * i;
+                    if (nx >= 0 && nx < BOARD_SIZE && ny >= 0 && ny < BOARD_SIZE && chessBoard[ny][nx] === player) {
+                        count++;
+                    } else {
+                        break;
+                    }
+                }
+
+                // 五子连珠则获胜
+                if (count >= 5) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        // 显示胜负弹窗
+        function showWinModal(player) {
+            const playerText = player === 1 ? '黑棋获胜！' : '白棋获胜！';
+            winPlayer.textContent = playerText;
+            // 给获胜方加样式（黑棋黑色字，白棋白色字带阴影）
+            winPlayer.className = `win-player ${player === 1 ? 'black-win' : 'white-win'}`;
+            winModal.style.display = 'flex';
+        }
+
+        // 关闭弹窗
+        function closeModal() {
+            winModal.style.display = 'none';
+        }
+
+        // 重新开始游戏
+        function restartGame() {
+            chessBoard = Array(BOARD_SIZE).fill().map(() => Array(BOARD_SIZE).fill(0));
+            currentPlayer = 1;
+            gameOver = false;
+            document.getElementById('current-player').textContent = '黑棋';
+            winModal.style.display = 'none'; // 关闭弹窗
+            initBoard();
+        }
+
+        // 页面加载时初始化
+        window.onload = initBoard;
+    </script>
+</body>
+</html>
